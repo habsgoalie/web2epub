@@ -45,8 +45,8 @@ def extract_article(url: str) -> dict:
         raise Exception("Could not extract article content from this URL")
     
     # Get title
-    title = trafilatura.extract_metadata(response.text, url=url)
-    title = title.title if title and title.title else "Untitled"
+    metadata = trafilatura.extract_metadata(response.text)
+    title = metadata.title if metadata and hasattr(metadata, 'title') and metadata.title else "Untitled"
     
     # Extract domain from URL
     parsed = urlparse(url)
