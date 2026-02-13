@@ -1,6 +1,6 @@
 import requests
 from urllib.parse import urlparse
-from readability import Document
+import trafilatura
 
 
 def extract_article(url: str) -> dict:
@@ -30,9 +30,23 @@ def extract_article(url: str) -> dict:
     response = requests.get(url, headers=headers, timeout=15)
     response.raise_for_status()
     
-    doc = Document(response.text)
-    title = doc.short_title() or doc.title() or "Untitled"
-    content = doc.summary()
+    # Use trafilatura to extract article
+    result = trafilatura.extract(
+        response.text,
+        url=url,
+        output_format='html',
+        include_comments=False,
+        include_tables=False,
+        include_images=True,
+        include_links=False
+    )
+    
+    if not result:
+        raise Exception("Could not extract article content from this URL")
+    
+    # Get title
+    title = trafilatura.extract_metadata(response.text, url=url)
+    title = title.title if title and title.title else "Untitled"
     
     # Extract domain from URL
     parsed = urlparse(url)
@@ -42,7 +56,7 @@ def extract_article(url: str) -> dict:
     
     return {
         "title": title,
-        "content": content,
+        "content": result,
         "url": url,
         "domain": domain
     }
