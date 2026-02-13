@@ -1,6 +1,6 @@
 import requests
 from urllib.parse import urlparse
-import trafilatura
+from readability import Document
 from bs4 import BeautifulSoup
 
 
@@ -38,61 +38,45 @@ def extract_article(url: str) -> dict:
     if domain.startswith("www."):
         domain = domain[4:]
     
-    # Try to get title from HTML first
-    title = _extract_title(html_content)
+    # Parse with BeautifulSoup using html5lib (more lenient than lxml)
+    soup = BeautifulSoup(html_content, 'html5lib')
     
-    # Use trafilatura to extract article content
-    try:
-        result = trafilatura.extract(
-            html_content,
-            url=url,
-            output_format='html',
-            include_comments=False,
-            include_tables=False,
-            include_images=True,
-            include_links=False
-        )
-        
-        if not result:
-            # Fallback: use the full HTML body
-            soup = BeautifulSoup(html_content, 'html.parser')
-            body = soup.find('body')
-            result = str(body) if body else html_content
-            
-    except Exception as e:
-        # Fallback on any extraction error
-        print(f"Trafilatura extraction failed: {e}")
-        soup = BeautifulSoup(html_content, 'html.parser')
+    # Get title
+    title = _extract_title(soup)
+    
+    # Use readability on the html5lib-parsed document
+    doc = Document(str(soup))
+    content = doc.summary()
+    
+    # If readability fails to extract content, use the body
+    if not content or len(content) < 100:
         body = soup.find('body')
-        result = str(body) if body else html_content
+        if body:
+            content = str(body)
+        else:
+            content = html_content
     
     return {
         "title": title,
-        "content": result,
+        "content": content,
         "url": url,
         "domain": domain
     }
 
 
-def _extract_title(html_content: str) -> str:
-    """Extract title from HTML."""
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Try various title sources
-        if soup.title and soup.title.string:
-            return soup.title.string.strip()
-        
-        h1 = soup.find('h1')
-        if h1 and h1.get_text():
-            return h1.get_text().strip()
-        
-        # Try Open Graph title
-        og_title = soup.find('meta', property='og:title')
-        if og_title and og_title.get('content'):
-            return og_title['content'].strip()
-            
-    except Exception:
-        pass
+def _extract_title(soup) -> str:
+    """Extract title from parsed HTML."""
+    # Try various title sources
+    if soup.title and soup.title.string:
+        return soup.title.string.strip()
+    
+    h1 = soup.find('h1')
+    if h1 and h1.get_text():
+        return h1.get_text().strip()
+    
+    # Try Open Graph title
+    og_title = soup.find('meta', property='og:title')
+    if og_title and og_title.get('content'):
+        return og_title['content'].strip()
     
     return "Untitled"
