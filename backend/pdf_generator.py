@@ -1,9 +1,4 @@
-import warnings
-from weasyprint import HTML
-
-
-# Suppress weasyprint warnings
-warnings.filterwarnings("ignore", module="weasyprint")
+import pdfkit
 
 
 PDF_TEMPLATE = """<!DOCTYPE html>
@@ -35,16 +30,28 @@ PDF_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+# pdfkit options for clean output
+PDFKIT_OPTIONS = {
+    'page-size': 'A4',
+    'margin-top': '20mm',
+    'margin-right': '20mm',
+    'margin-bottom': '20mm',
+    'margin-left': '20mm',
+    'encoding': 'UTF-8',
+    'no-outline': None,
+    'quiet': '',
+}
+
 
 def generate_pdf(title: str, content: str, url: str) -> bytes:
     """
     Convert extracted article HTML into a clean, readable PDF.
-    
+
     Args:
         title: Article title
-        content: Clean HTML content (from readability)
+        content: Clean HTML content
         url: Original source URL
-    
+
     Returns:
         PDF as bytes
     """
@@ -53,8 +60,7 @@ def generate_pdf(title: str, content: str, url: str) -> bytes:
         content=content,
         url=url
     )
-    
-    html = HTML(string=html_string)
-    pdf_bytes = html.write_pdf()
-    
+
+    pdf_bytes = pdfkit.from_string(html_string, False, options=PDFKIT_OPTIONS)
+
     return pdf_bytes
