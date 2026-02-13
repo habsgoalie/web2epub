@@ -39,13 +39,24 @@ jobs:
           # Wait for server to start
           sleep 5
           
-          # Test health endpoint (should get 401 without auth, meaning server is running)
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ || true)
+          # Test login page (should get 302 redirect to /login or 200 on /login)
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/login || true)
           
-          if [ "$response" = "401" ] || [ "$response" = "200" ]; then
-            echo "✓ Server is responding (HTTP $response)"
+          if [ "$response" = "200" ]; then
+            echo "Server is responding - login page OK (HTTP $response)"
           else
-            echo "✗ Server not responding correctly (HTTP $response)"
+            echo "Server not responding correctly (HTTP $response)"
+            docker logs web2epub-test
+            exit 1
+          fi
+          
+          # Test API with Basic Auth
+          api_response=$(curl -s -o /dev/null -w "%{http_code}" -u testuser:testpass http://localhost:8000/api/articles || true)
+          
+          if [ "$api_response" = "200" ]; then
+            echo "API responding with auth (HTTP $api_response)"
+          else
+            echo "API not responding correctly (HTTP $api_response)"
             docker logs web2epub-test
             exit 1
           fi
