@@ -1,0 +1,12 @@
+services:
+  web2epub:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
+      - DATA_DIR=/data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

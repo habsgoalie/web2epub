@@ -1,0 +1,53 @@
+name: Test Docker Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: web2epub:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test container starts
+        run: |
+          docker run -d \
+            -e AUTH_USERNAME=testuser \
+            -e AUTH_PASSWORD=testpass \
+            -p 8000:8000 \
+            --name web2epub-test \
+            web2epub:test
+          
+          # Wait for server to start
+          sleep 5
+          
+          # Test health endpoint (should get 401 without auth, meaning server is running)
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ || true)
+          
+          if [ "$response" = "401" ] || [ "$response" = "200" ]; then
+            echo "✓ Server is responding (HTTP $response)"
+          else
+            echo "✗ Server not responding correctly (HTTP $response)"
+            docker logs web2epub-test
+            exit 1
+          fi
+          
+          docker stop web2epub-test
+          docker rm web2epub-test

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved Articles</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Georgia, serif;
+            font-size: 18px;
+            line-height: 1.5;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 16px;
+            background: #fff;
+            color: #000;
+        }
+        
+        h1 {
+            font-size: 28px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .article {
+            border-bottom: 1px solid #ccc;
+            padding: 16px 0;
+        }
+        
+        .article:last-of-type {
+            border-bottom: none;
+        }
+        
+        .article-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .article-title a {
+            color: #000;
+            text-decoration: none;
+            display: block;
+        }
+        
+        .article-title a:hover {
+            text-decoration: underline;
+        }
+        
+        .article-meta {
+            font-size: 14px;
+            color: #555;
+            margin-top: 4px;
+        }
+        
+        .pagination {
+            margin-top: 24px;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .pagination a {
+            padding: 8px 16px;
+            border: 1px solid #000;
+            text-decoration: none;
+            color: #000;
+            display: inline-block;
+        }
+        
+        .pagination a:hover {
+            background: #f0f0f0;
+        }
+        
+        .page-info {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 14px;
+            color: #555;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 16px;
+            color: #555;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Saved Articles</h1>
+    
+    {% if articles %}
+        {% for article in articles %}
+        <div class="article">
+            <div class="article-title">
+                <a href="/articles/{{ article.id }}/download">{{ article.title }}</a>
+            </div>
+            <div class="article-meta">
+                {{ article.domain }} · {{ article.formatted_date }}
+            </div>
+        </div>
+        {% endfor %}
+        
+        <div class="pagination">
+            {% if has_prev %}
+            <a href="/?page={{ page - 1 }}">Previous</a>
+            {% else %}
+            <span></span>
+            {% endif %}
+            
+            {% if has_next %}
+            <a href="/?page={{ page + 1 }}">Next</a>
+            {% else %}
+            <span></span>
+            {% endif %}
+        </div>
+        
+        <div class="page-info">
+            Page {{ page }} of {{ total_pages }}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            No saved articles yet.<br>
+            Use the browser extension to save articles.
+        </div>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            width: 320px;
+            padding: 16px;
+            margin: 0;
+        }
+        
+        h1 {
+            font-size: 16px;
+            margin: 0 0 12px 0;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #0052a3;
+        }
+        
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+        
+        #status {
+            margin-top: 12px;
+            font-size: 14px;
+            min-height: 20px;
+        }
+        
+        #status.success {
+            color: #28a745;
+        }
+        
+        #status.error {
+            color: #dc3545;
+        }
+        
+        .setup-link {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        .setup-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>web2epub Saver</h1>
+    <button id="saveBtn">Save This Article</button>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+</body>
+</html>
