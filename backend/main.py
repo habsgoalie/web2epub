@@ -65,8 +65,8 @@ jinja_env = Environment(loader=FileSystemLoader(template_dir))
 # HTML Response helper
 @app.get("/", response_class=HTMLResponse)
 async def index(
-    page: int = Query(1, ge=1),
-    credentials: Annotated[HTTPBasicCredentials, Depends(verify_credentials)]
+    credentials: Annotated[HTTPBasicCredentials, Depends(verify_credentials)],
+    page: int = Query(1, ge=1)
 ):
     """Serve the HTML article list page (e-reader friendly)."""
     articles = storage.load_articles()
