@@ -14,6 +14,194 @@ def _is_twitter_url(url: str) -> bool:
     return bool(re.match(r"^/[^/]+/status/\d+", parsed.path))
 
 
+def _parse_twitter_url(url: str) -> tuple[str, str]:
+    """Extract username and status ID from a Twitter/X URL."""
+    parsed = urlparse(url)
+    parts = parsed.path.strip("/").split("/")
+    # parts = [username, "status", id]
+    return parts[0], parts[2]
+
+
+def _article_blocks_to_html(article: dict, entity_map: dict) -> str:
+    """Convert fxtwitter article content blocks to clean HTML."""
+    html_parts = []
+    blocks = article.get("content", {}).get("blocks", [])
+
+    for block in blocks:
+        text = block.get("text", "")
+        block_type = block.get("type", "unstyled")
+        entity_ranges = block.get("entityRanges", [])
+        inline_styles = block.get("inlineStyleRanges", [])
+
+        if not text:
+            continue
+
+        # Apply inline styles and entity links
+        # Build a list of markup insertions sorted by offset
+        insertions = []  # (offset, is_close, priority, tag)
+
+        for style in inline_styles:
+            offset = style["offset"]
+            length = style["length"]
+            style_name = style.get("style", "")
+            if style_name == "Bold":
+                insertions.append((offset, False, 0, "<strong>"))
+                insertions.append((offset + length, True, 0, "</strong>"))
+            elif style_name == "Italic":
+                insertions.append((offset, False, 0, "<em>"))
+                insertions.append((offset + length, True, 0, "</em>"))
+
+        for er in entity_ranges:
+            offset = er["offset"]
+            length = er["length"]
+            key = str(er["key"])
+            entity = entity_map.get(key, {})
+            entity_data = entity.get("data", {})
+            link_url = entity_data.get("url", "")
+            if link_url:
+                insertions.append((offset, False, 1, f'<a href="{link_url}">'))
+                insertions.append((offset + length, True, 1, "</a>"))
+
+        # Sort: by offset, then closes before opens, then by priority
+        insertions.sort(key=lambda x: (x[0], x[1], x[2]))
+
+        # Build the text with markup
+        result = []
+        last_pos = 0
+        for offset, _is_close, _prio, tag in insertions:
+            if offset > last_pos:
+                result.append(text[last_pos:offset])
+            result.append(tag)
+            last_pos = offset
+        if last_pos < len(text):
+            result.append(text[last_pos:])
+
+        styled_text = "".join(result)
+
+        # Wrap in appropriate HTML element
+        if block_type == "header-one":
+            html_parts.append(f"<h2>{styled_text}</h2>")
+        elif block_type == "header-two":
+            html_parts.append(f"<h3>{styled_text}</h3>")
+        elif block_type == "header-three":
+            html_parts.append(f"<h4>{styled_text}</h4>")
+        elif block_type == "unordered-list-item":
+            html_parts.append(f"<li>{styled_text}</li>")
+        elif block_type == "ordered-list-item":
+            html_parts.append(f"<li>{styled_text}</li>")
+        elif block_type == "blockquote":
+            html_parts.append(f"<blockquote><p>{styled_text}</p></blockquote>")
+        else:
+            html_parts.append(f"<p>{styled_text}</p>")
+
+    # Wrap consecutive <li> items in <ul> or <ol>
+    output = []
+    in_list = False
+    for part in html_parts:
+        if part.startswith("<li>"):
+            if not in_list:
+                output.append("<ul>")
+                in_list = True
+            output.append(part)
+        else:
+            if in_list:
+                output.append("</ul>")
+                in_list = False
+            output.append(part)
+    if in_list:
+        output.append("</ul>")
+
+    return "\n".join(output)
+
+
+def _extract_twitter(url: str) -> dict:
+    """Extract tweet content using the fxtwitter API."""
+    username, status_id = _parse_twitter_url(url)
+
+    # Use fxtwitter API which provides full tweet + article data
+    api_url = f"https://api.fxtwitter.com/{username}/status/{status_id}"
+    resp = requests.get(api_url, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    tweet = data.get("tweet", {})
+    author = tweet.get("author", {}).get("name", "Unknown")
+    author_handle = tweet.get("author", {}).get("screen_name", "")
+    tweet_text = tweet.get("text", "")
+
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower().removeprefix("www.")
+
+    # Check if this tweet contains an X Article
+    article = tweet.get("article")
+    if article:
+        article_title = article.get("title", "Untitled")
+        entity_map_list = article.get("content", {}).get("entityMap", [])
+        # Convert entity map list to dict keyed by "key" field
+        entity_map = {}
+        for item in entity_map_list:
+            key = str(item.get("key", ""))
+            entity_map[key] = item.get("value", {})
+
+        content = _article_blocks_to_html(article, entity_map)
+
+        # Add attribution
+        content = (
+            f'<p style="font-size: 12pt; color: #555;">By '
+            f'<strong>{author}</strong> (@{author_handle})</p>\n'
+            + content
+            + f'\n<p style="font-size: 10pt; color: #888; margin-top: 2em;">'
+            f'<a href="{url}">View original post</a></p>'
+        )
+
+        return {
+            "title": article_title,
+            "content": content,
+            "url": url,
+            "domain": domain,
+        }
+
+    # Regular tweet (no article) — check if it's just a shared link
+    if not tweet_text or tweet_text.startswith("https://t.co/"):
+        # Try to resolve any t.co links in the tweet
+        urls = re.findall(r"https?://t\.co/\w+", tweet_text or "")
+        if urls:
+            resolved_url = _resolve_tco(urls[0])
+            resolved_parsed = urlparse(resolved_url)
+            resolved_host = resolved_parsed.netloc.lower().removeprefix("www.")
+            if resolved_host not in ("twitter.com", "x.com", "t.co"):
+                return extract_article(resolved_url)
+
+    # Regular tweet with text content
+    title = f"@{author_handle}: {tweet_text[:80]}{'...' if len(tweet_text) > 80 else ''}"
+    if not title or title == f"@{author_handle}: ":
+        title = f"Post by @{author_handle}"
+
+    content_parts = [
+        f'<p style="font-size: 12pt; color: #555;">Post by '
+        f'<strong>{author}</strong> (@{author_handle})</p>',
+    ]
+
+    if tweet_text:
+        # Convert newlines to paragraphs
+        for para in tweet_text.split("\n"):
+            para = para.strip()
+            if para:
+                content_parts.append(f"<p>{para}</p>")
+
+    content_parts.append(
+        f'<p style="font-size: 10pt; color: #888; margin-top: 2em;">'
+        f'<a href="{url}">View original post</a></p>'
+    )
+
+    return {
+        "title": title,
+        "content": "\n".join(content_parts),
+        "url": url,
+        "domain": domain,
+    }
+
+
 def _resolve_tco(url: str) -> str:
     """Resolve a t.co shortened URL to its destination."""
     try:
@@ -21,106 +209,6 @@ def _resolve_tco(url: str) -> str:
         return resp.url
     except Exception:
         return url
-
-
-def _tweet_is_link_only(soup) -> str | None:
-    """If tweet content is just a single t.co link, return that URL. Otherwise None."""
-    paragraphs = soup.find_all("p")
-    if len(paragraphs) != 1:
-        return None
-    p = paragraphs[0]
-    links = p.find_all("a")
-    text_without_links = p.get_text(strip=True)
-    # Check if the only text content is the link text itself
-    if len(links) == 1:
-        link_text = links[0].get_text(strip=True)
-        href = links[0].get("href", "")
-        if text_without_links == link_text and "t.co" in href:
-            return href
-    return None
-
-
-def _extract_twitter(url: str) -> dict:
-    """Extract tweet content using Twitter's oEmbed API."""
-    oembed_url = "https://publish.twitter.com/oembed"
-    resp = requests.get(
-        oembed_url,
-        params={"url": url, "omit_script": "true"},
-        timeout=15,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-
-    author = data.get("author_name", "Unknown")
-    html = data.get("html", "")
-
-    # Parse the oEmbed blockquote to extract tweet text paragraphs
-    soup = BeautifulSoup(html, "html.parser")
-
-    # If the tweet is just a shared link, resolve it and extract that article instead
-    tco_link = _tweet_is_link_only(soup)
-    if tco_link:
-        resolved_url = _resolve_tco(tco_link)
-        # If it resolves to a non-Twitter page, extract that article
-        if not _is_twitter_url(resolved_url):
-            resolved_parsed = urlparse(resolved_url)
-            resolved_host = resolved_parsed.netloc.lower().removeprefix("www.")
-            if resolved_host not in ("twitter.com", "x.com", "t.co"):
-                return extract_article(resolved_url)
-
-        # Otherwise fall through and render the tweet with the resolved link
-        resolved_url = resolved_url if resolved_url != tco_link else tco_link
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower().removeprefix("www.")
-        return {
-            "title": f"@{author} shared: {resolved_url[:70]}",
-            "content": (
-                f'<p style="font-size: 12pt; color: #555;">Post by '
-                f'<strong>{author}</strong></p>'
-                f'<p>Shared link: <a href="{resolved_url}">{resolved_url}</a></p>'
-                f'<p style="font-size: 10pt; color: #888; margin-top: 2em;">'
-                f'<a href="{url}">View original post</a></p>'
-            ),
-            "url": url,
-            "domain": domain,
-        }
-
-    # Extract just the <p> tags (the actual tweet text)
-    paragraphs = soup.find_all("p")
-    tweet_paragraphs = []
-    for p in paragraphs:
-        text = p.get_text(strip=True)
-        if text:
-            tweet_paragraphs.append(str(p))
-
-    tweet_text = soup.get_text(separator=" ", strip=True)
-    title = f"@{author}: {tweet_text[:80]}{'...' if len(tweet_text) > 80 else ''}"
-
-    # Build clean, readable HTML content for the PDF
-    content_parts = []
-    content_parts.append(f'<p style="font-size: 12pt; color: #555;">Post by '
-                         f'<strong>{author}</strong></p>')
-    if tweet_paragraphs:
-        for p_html in tweet_paragraphs:
-            content_parts.append(p_html)
-    else:
-        # Fallback: use full blockquote text
-        content_parts.append(f"<p>{tweet_text}</p>")
-
-    content_parts.append(f'<p style="font-size: 10pt; color: #888; margin-top: 2em;">'
-                         f'<a href="{url}">View original post</a></p>')
-
-    content = "\n".join(content_parts)
-
-    parsed = urlparse(url)
-    domain = parsed.netloc.lower().removeprefix("www.")
-
-    return {
-        "title": title,
-        "content": content,
-        "url": url,
-        "domain": domain,
-    }
 
 
 def extract_article(url: str) -> dict:
@@ -139,7 +227,7 @@ def extract_article(url: str) -> dict:
         requests.RequestException: If network request fails
         Exception: If extraction fails
     """
-    # Handle Twitter/X posts via oEmbed API
+    # Handle Twitter/X posts via fxtwitter API
     if _is_twitter_url(url):
         return _extract_twitter(url)
 
