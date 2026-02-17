@@ -14,6 +14,32 @@ def _is_twitter_url(url: str) -> bool:
     return bool(re.match(r"^/[^/]+/status/\d+", parsed.path))
 
 
+def _resolve_tco(url: str) -> str:
+    """Resolve a t.co shortened URL to its destination."""
+    try:
+        resp = requests.head(url, allow_redirects=True, timeout=10)
+        return resp.url
+    except Exception:
+        return url
+
+
+def _tweet_is_link_only(soup) -> str | None:
+    """If tweet content is just a single t.co link, return that URL. Otherwise None."""
+    paragraphs = soup.find_all("p")
+    if len(paragraphs) != 1:
+        return None
+    p = paragraphs[0]
+    links = p.find_all("a")
+    text_without_links = p.get_text(strip=True)
+    # Check if the only text content is the link text itself
+    if len(links) == 1:
+        link_text = links[0].get_text(strip=True)
+        href = links[0].get("href", "")
+        if text_without_links == link_text and "t.co" in href:
+            return href
+    return None
+
+
 def _extract_twitter(url: str) -> dict:
     """Extract tweet content using Twitter's oEmbed API."""
     oembed_url = "https://publish.twitter.com/oembed"
@@ -28,18 +54,70 @@ def _extract_twitter(url: str) -> dict:
     author = data.get("author_name", "Unknown")
     html = data.get("html", "")
 
-    # The oEmbed HTML is a <blockquote> with the tweet text
+    # Parse the oEmbed blockquote to extract tweet text paragraphs
     soup = BeautifulSoup(html, "html.parser")
-    tweet_text = soup.get_text(separator=" ", strip=True)
 
+    # If the tweet is just a shared link, resolve it and extract that article instead
+    tco_link = _tweet_is_link_only(soup)
+    if tco_link:
+        resolved_url = _resolve_tco(tco_link)
+        # If it resolves to a non-Twitter page, extract that article
+        if not _is_twitter_url(resolved_url):
+            resolved_parsed = urlparse(resolved_url)
+            resolved_host = resolved_parsed.netloc.lower().removeprefix("www.")
+            if resolved_host not in ("twitter.com", "x.com", "t.co"):
+                return extract_article(resolved_url)
+
+        # Otherwise fall through and render the tweet with the resolved link
+        resolved_url = resolved_url if resolved_url != tco_link else tco_link
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower().removeprefix("www.")
+        return {
+            "title": f"@{author} shared: {resolved_url[:70]}",
+            "content": (
+                f'<p style="font-size: 12pt; color: #555;">Post by '
+                f'<strong>{author}</strong></p>'
+                f'<p>Shared link: <a href="{resolved_url}">{resolved_url}</a></p>'
+                f'<p style="font-size: 10pt; color: #888; margin-top: 2em;">'
+                f'<a href="{url}">View original post</a></p>'
+            ),
+            "url": url,
+            "domain": domain,
+        }
+
+    # Extract just the <p> tags (the actual tweet text)
+    paragraphs = soup.find_all("p")
+    tweet_paragraphs = []
+    for p in paragraphs:
+        text = p.get_text(strip=True)
+        if text:
+            tweet_paragraphs.append(str(p))
+
+    tweet_text = soup.get_text(separator=" ", strip=True)
     title = f"@{author}: {tweet_text[:80]}{'...' if len(tweet_text) > 80 else ''}"
+
+    # Build clean, readable HTML content for the PDF
+    content_parts = []
+    content_parts.append(f'<p style="font-size: 12pt; color: #555;">Post by '
+                         f'<strong>{author}</strong></p>')
+    if tweet_paragraphs:
+        for p_html in tweet_paragraphs:
+            content_parts.append(p_html)
+    else:
+        # Fallback: use full blockquote text
+        content_parts.append(f"<p>{tweet_text}</p>")
+
+    content_parts.append(f'<p style="font-size: 10pt; color: #888; margin-top: 2em;">'
+                         f'<a href="{url}">View original post</a></p>')
+
+    content = "\n".join(content_parts)
 
     parsed = urlparse(url)
     domain = parsed.netloc.lower().removeprefix("www.")
 
     return {
         "title": title,
-        "content": html,
+        "content": content,
         "url": url,
         "domain": domain,
     }
