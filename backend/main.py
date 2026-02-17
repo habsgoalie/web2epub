@@ -93,6 +93,15 @@ template_dir = os.path.join(os.path.dirname(__file__), "templates")
 jinja_env = Environment(loader=FileSystemLoader(template_dir))
 
 
+# --- Static assets (no auth required) ---
+
+@app.get("/favicon.svg")
+async def favicon():
+    """Serve the favicon (no auth required — browsers request this automatically)."""
+    favicon_path = os.path.join(os.path.dirname(__file__), "static", "favicon.svg")
+    return FileResponse(favicon_path, media_type="image/svg+xml")
+
+
 # --- Login routes (no auth required) ---
 
 @app.get("/login", response_class=HTMLResponse)
