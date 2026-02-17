@@ -203,11 +203,14 @@ async def download_article(
     article = storage.get_article(article_id)
     title = article["title"] if article else "article"
 
+    # Sanitize filename to ASCII for HTTP headers (latin-1 encoding requirement)
+    safe_title = title[:50].encode("ascii", errors="replace").decode("ascii")
+
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
-        filename=f"{title[:50]}.pdf",
-        headers={"Content-Disposition": f'attachment; filename="{title[:50]}.pdf"'},
+        filename=f"{safe_title}.pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.pdf"'},
     )
 
 
