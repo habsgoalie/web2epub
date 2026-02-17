@@ -8,18 +8,17 @@ PDF_TEMPLATE = """<!DOCTYPE html>
     <style>
         body {{
             font-family: Georgia, serif;
-            font-size: 14pt;
+            font-size: 18pt;
             line-height: 1.6;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
             color: #222;
         }}
-        h1 {{ font-size: 20pt; margin-bottom: 0.3em; }}
-        .source {{ color: #666; font-size: 10pt; margin-bottom: 2em; }}
+        h1 {{ font-size: 24pt; margin-bottom: 0.3em; }}
+        .source {{ color: #666; font-size: 12pt; margin-bottom: 2em; }}
         img {{ max-width: 100%; height: auto; }}
         a {{ color: #222; }}
-        pre, code {{ font-size: 11pt; overflow-wrap: break-word; }}
+        pre, code {{ font-size: 14pt; overflow-wrap: break-word; }}
     </style>
 </head>
 <body>
@@ -33,10 +32,10 @@ PDF_TEMPLATE = """<!DOCTYPE html>
 # pdfkit options for clean output
 PDFKIT_OPTIONS = {
     'page-size': 'A4',
-    'margin-top': '20mm',
-    'margin-right': '20mm',
-    'margin-bottom': '20mm',
-    'margin-left': '20mm',
+    'margin-top': '8mm',
+    'margin-right': '8mm',
+    'margin-bottom': '8mm',
+    'margin-left': '8mm',
     'encoding': 'UTF-8',
     'no-outline': None,
     'quiet': '',
