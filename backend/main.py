@@ -3,6 +3,7 @@ import sys
 import hashlib
 from datetime import datetime
 from typing import Annotated, Optional
+from urllib.parse import quote
 
 import storage
 import extractor
@@ -145,6 +146,8 @@ async def index(
     request: Request,
     session: Annotated[Optional[str], Cookie()] = None,
     page: int = Query(1, ge=1),
+    msg: str = Query(""),
+    msg_type: str = Query(""),
 ):
     """Serve the HTML article list page (e-reader friendly)."""
     if not verify_session_cookie(session):
@@ -177,6 +180,8 @@ async def index(
         total_pages=total_pages,
         has_prev=page > 1,
         has_next=page < total_pages,
+        message=msg,
+        message_type=msg_type,
     )
 
     return HTMLResponse(content=html)
@@ -204,6 +209,51 @@ async def download_article(
         filename=f"{title[:50]}.pdf",
         headers={"Content-Disposition": f'attachment; filename="{title[:50]}.pdf"'},
     )
+
+
+@app.post("/save")
+async def save_article_form(
+    session: Annotated[Optional[str], Cookie()] = None,
+    url: str = Form(...),
+):
+    """Handle URL form submission from the web UI (cookie auth, no JS)."""
+    if not verify_session_cookie(session):
+        return RedirectResponse(url="/login", status_code=302)
+
+    if not url or not url.startswith(("http://", "https://")):
+        return RedirectResponse(
+            url="/?msg=Invalid+URL&msg_type=error", status_code=302
+        )
+
+    try:
+        # Extract article
+        extracted = extractor.extract_article(url)
+
+        # Generate PDF
+        pdf_bytes = pdf_generator.generate_pdf(
+            title=extracted["title"],
+            content=extracted["content"],
+            url=extracted["url"],
+        )
+
+        # Save to storage
+        storage.add_article(
+            title=extracted["title"],
+            url=extracted["url"],
+            domain=extracted["domain"],
+            pdf_bytes=pdf_bytes,
+        )
+
+        return RedirectResponse(
+            url=f"/?msg={quote(extracted['title'])}+saved&msg_type=success",
+            status_code=302,
+        )
+
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/?msg=Failed:+{quote(str(e)[:100])}&msg_type=error",
+            status_code=302,
+        )
 
 
 # --- API routes (HTTP Basic Auth for extension) ---

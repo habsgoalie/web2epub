@@ -103,6 +103,67 @@
             color: #555;
             font-size: 16px;
         }
+        
+        .save-form {
+            margin-bottom: 24px;
+            padding: 16px;
+            border: 2px solid #000;
+            background: #f9f9f9;
+        }
+        
+        .save-form label {
+            display: block;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .save-form-row {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .save-form input[type="url"] {
+            flex: 1;
+            font-size: 18px;
+            padding: 12px;
+            border: 2px solid #000;
+            font-family: Georgia, serif;
+        }
+        
+        .save-form button {
+            font-size: 18px;
+            padding: 12px 24px;
+            border: 2px solid #000;
+            background: #000;
+            color: #fff;
+            cursor: pointer;
+            font-family: Georgia, serif;
+            white-space: nowrap;
+        }
+        
+        .save-form button:hover {
+            background: #333;
+        }
+        
+        .message {
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            font-size: 16px;
+            border: 2px solid;
+        }
+        
+        .message-success {
+            border-color: #2e7d32;
+            background: #e8f5e9;
+            color: #1b5e20;
+        }
+        
+        .message-error {
+            border-color: #c62828;
+            background: #ffebee;
+            color: #b71c1c;
+        }
     </style>
 </head>
 <body>
@@ -110,6 +171,20 @@
         <h1>Saved Articles</h1>
         <a href="/logout" class="logout">Log out</a>
     </div>
+    
+    {% if message %}
+    <div class="message {{ 'message-success' if message_type == 'success' else 'message-error' }}">
+        {{ message }}
+    </div>
+    {% endif %}
+    
+    <form class="save-form" action="/save" method="post">
+        <label for="url">Save an article</label>
+        <div class="save-form-row">
+            <input type="url" id="url" name="url" placeholder="https://example.com/article" required>
+            <button type="submit">Save</button>
+        </div>
+    </form>
     
     {% if articles %}
         {% for article in articles %}
@@ -143,7 +218,7 @@
     {% else %}
         <div class="empty-state">
             No saved articles yet.<br>
-            Use the browser extension to save articles.
+            Paste a URL above or use the browser extension to save articles.
         </div>
     {% endif %}
 </body>
