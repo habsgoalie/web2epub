@@ -69,6 +69,27 @@
             font-size: 14px;
             color: #555;
             margin-top: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .delete-form {
+            display: inline;
+        }
+        
+        .delete-btn {
+            font-size: 14px;
+            padding: 6px 14px;
+            border: 1px solid #c62828;
+            background: #fff;
+            color: #c62828;
+            cursor: pointer;
+            font-family: Georgia, serif;
+        }
+        
+        .delete-btn:hover {
+            background: #ffebee;
         }
         
         .pagination {
@@ -193,7 +214,10 @@
                 <a href="/articles/{{ article.id }}/download">{{ article.title }}</a>
             </div>
             <div class="article-meta">
-                {{ article.domain }} · {{ article.formatted_date }}
+                <span>{{ article.domain }} · {{ article.formatted_date }}</span>
+                <form class="delete-form" action="/articles/{{ article.id }}/delete" method="post">
+                    <button type="submit" class="delete-btn">Delete</button>
+                </form>
             </div>
         </div>
         {% endfor %}

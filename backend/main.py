@@ -256,6 +256,30 @@ async def save_article_form(
         )
 
 
+@app.post("/articles/{article_id}/delete")
+async def delete_article_form(
+    article_id: str,
+    session: Annotated[Optional[str], Cookie()] = None,
+):
+    """Handle delete button from the web UI (cookie auth, no JS)."""
+    if not verify_session_cookie(session):
+        return RedirectResponse(url="/login", status_code=302)
+
+    article = storage.get_article(article_id)
+    if not article:
+        return RedirectResponse(
+            url="/?msg=Article+not+found&msg_type=error", status_code=302
+        )
+
+    title = article["title"]
+    storage.delete_article(article_id)
+
+    return RedirectResponse(
+        url=f"/?msg={quote(title)}+deleted&msg_type=success",
+        status_code=302,
+    )
+
+
 # --- API routes (HTTP Basic Auth for extension) ---
 
 @app.post("/api/articles", status_code=201, dependencies=[Depends(require_auth_api)])

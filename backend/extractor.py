@@ -1,6 +1,48 @@
+import re
 import requests
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
+
+
+def _is_twitter_url(url: str) -> bool:
+    """Check if the URL is a Twitter/X post."""
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().removeprefix("www.")
+    if host not in ("twitter.com", "x.com"):
+        return False
+    # Match /<user>/status/<id> pattern
+    return bool(re.match(r"^/[^/]+/status/\d+", parsed.path))
+
+
+def _extract_twitter(url: str) -> dict:
+    """Extract tweet content using Twitter's oEmbed API."""
+    oembed_url = "https://publish.twitter.com/oembed"
+    resp = requests.get(
+        oembed_url,
+        params={"url": url, "omit_script": "true"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    author = data.get("author_name", "Unknown")
+    html = data.get("html", "")
+
+    # The oEmbed HTML is a <blockquote> with the tweet text
+    soup = BeautifulSoup(html, "html.parser")
+    tweet_text = soup.get_text(separator=" ", strip=True)
+
+    title = f"@{author}: {tweet_text[:80]}{'...' if len(tweet_text) > 80 else ''}"
+
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower().removeprefix("www.")
+
+    return {
+        "title": title,
+        "content": html,
+        "url": url,
+        "domain": domain,
+    }
 
 
 def extract_article(url: str) -> dict:
@@ -19,6 +61,10 @@ def extract_article(url: str) -> dict:
         requests.RequestException: If network request fails
         Exception: If extraction fails
     """
+    # Handle Twitter/X posts via oEmbed API
+    if _is_twitter_url(url):
+        return _extract_twitter(url)
+
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
